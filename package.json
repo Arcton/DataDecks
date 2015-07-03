@@ -1,0 +1,22 @@
+{
+    "name": "datadeck-server",
+    "description": "Server for DataDecks project",
+    "homepage": "https://github.com/Arcton/DataDecks",
+    "repository": {
+        "type": "git",
+        "url": "Arcton/DataDecks"
+    },
+    "license": "MIT",
+    "dependencies": {
+        "ws": "~0.7.2",
+        "serve-static": "~1.10.0",
+        "connect": "~3.4.0"
+    },
+    "devDependencies": {
+        "coffee-script": "~1.9.3"
+    },
+    "scripts": {
+        "prepublish": "coffee -o lib/ -c src/"
+    },
+    "main": "lib/server.js"
+}
