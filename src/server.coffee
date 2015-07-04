@@ -13,7 +13,7 @@ player_id = 0
 join_room = (message) ->
     try
         json = JSON.parse message.data
-        throw ':(' unless json.id? and server.decks[json.id]?
+        throw null unless json.id? and server.decks[json.id]?
         deck = server.decks[json.id]
         deck.lobby = {
             deck: deck
@@ -127,12 +127,11 @@ update_score = (lobby) ->
             best = score if score < best
     ((increment_score lobby, player) if (get_pick_value lobby, player) is best) for player in lobby.players
 
-class tantrum
 player_pick_card = (message) ->
     this.onmessage = null
     try
         json = JSON.parse message.data
-        throw new tantrum unless json.id? and (index = this.player.cards.indexOf json.id) isnt -1
+        throw null unless json.id? and (index = this.player.cards.indexOf json.id) isnt -1
         this.player.cards.splice index, 1
         this.player.pick = json.id
         if lobby_picked this.lobby
@@ -160,7 +159,7 @@ notify_picker = (lobby) ->
 player_pick_category = (message) ->
     try
         json = JSON.parse message.data
-        throw '(╯°□°）╯︵ ┻━┻' unless json.id? and json.high_good?
+        throw null unless json.id? and json.high_good?
         this.lobby.category = json.id
         this.lobby.high_good = json.high_good
         lobby_broadcast this.lobby, {
