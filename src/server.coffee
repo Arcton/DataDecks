@@ -25,6 +25,7 @@ join_room = (message) ->
             ready: false
             ws: this
             cards: []
+            score: 0
         }
         deck.lobby.players.unshift this.player
         this.onmessage = player_ready
@@ -44,7 +45,6 @@ player_ready = () ->
         this.lobby.deck.lobby = null
         this.lobby.deck.playing.shift this.lobby
         deal_cards this.lobby
-        set_picker this.lobby
         notify_picker this.lobby
 
 lobby_broadcast = (lobby, message, newstate) ->
@@ -60,6 +60,23 @@ lobby_picked = (lobby) ->
     (return false unless player.pick?) for player in lobby.players
     true
 
+get_pick_value = (lobby, player) ->
+    lobby.deck.cards[player.pick].categories[lobby.category]
+
+increment_score = (lobby, player) ->
+    player.score += 1
+    lobby_broadcast lobby, JSON.stringify { type: "score", player: player.ws.datadeck_client, score: player.score }
+
+update_score = (lobby) ->
+    best = get_pick_value lobby, lobby.players[0]
+    for player in lobby.players
+        score = get_pick_value lobby, player
+        if lobby.high_good
+            best = score if score > best
+        else
+            best = score if score < best
+    ((increment_score lobby, player) if (get_pick_value lobby, player) is best) for player in lobby.players
+
 class tantrum
 player_pick_card = (message) ->
     this.onmessage = null
@@ -69,17 +86,18 @@ player_pick_card = (message) ->
         this.player.cards.splice index, 1
         this.player.pick = json.id
         if lobby_picked this.lobby
+            update_score this.lobby
             for player in this.lobby.players
                 console.log this.lobby.deck.cards[player.pick]
                 delete player.pick
+        deal_cards this.lobby
+        notify_picker this.lobby
     catch
         this.terminate()
 
-set_picker = (lobby) ->
+notify_picker = (lobby) ->
     lobby.picker ?= Math.floor(Math.random() * lobby.players.length)
     lobby.picker = 0 if lobby.picker >= lobby.players.length
-
-notify_picker = (lobby) ->
     player = lobby.players[lobby.picker]
     player.ws.send JSON.stringify { type: "pick_category" }
     player.ws.onmessage = player_pick_category
