@@ -49,6 +49,8 @@ join_room = (message) ->
             type: "player"
             id: this.player.id
         }
+        if this.lobby.players.length >= this.lobby.deck.max_players
+            lobby_start this.lobby
     catch
         this.terminate()
 
@@ -66,15 +68,18 @@ lobby_ready = (lobby) ->
     (return false unless player.ready) for player in lobby.players
     true
 
+lobby_start = (lobby) ->
+    lobby.deck.lobby = null
+    deal_cards lobby
+    notify_picker lobby
+
 player_ready = () ->
     console.log '%d ready', this.player.id
     this.player.ready = true
     this.onmessage = null
     if this.lobby.players.length > 1 and lobby_ready this.lobby
         console.log 'lobby ready'
-        this.lobby.deck.lobby = null
-        deal_cards this.lobby
-        notify_picker this.lobby
+        lobby_start lobby
 
 lobby_broadcast = (lobby, message, newstate) ->
     if newstate?
