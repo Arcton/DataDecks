@@ -38,18 +38,45 @@ lobby_ready = (lobby) ->
 player_ready = () ->
     console.log '%d ready', this.datadeck_client
     this.player.ready = true
+    this.onmessage = null
     if lobby_ready this.lobby
         console.log 'lobby ready'
         this.lobby.deck.lobby = null
         this.lobby.deck.playing.shift this.lobby
         deal_cards this.lobby
-        this.onmessage = null
+        set_picker this.lobby
+        notify_picker this.lobby
+
+lobby_broadcast = (lobby, message, newstate) ->
+    if newstate?
+        for player in lobby.players
+            player.ws.send message
+            player.ws.onmessage = newstate
+    else
+        player.ws.send message for player in lobby.players
+    undefined
 
 player_pick_card = (message) ->
-    console.log message.data
+    console.log 'pick card: %s', message.data
+
+set_picker = (lobby) ->
+    lobby.picker ?= Math.floor(Math.random() * lobby.players.length)
+    lobby.picker = 0 if lobby.picker >= lobby.players.length
+
+notify_picker = (lobby) ->
+    player = lobby.players[lobby.picker]
+    player.ws.send JSON.stringify { type: "pick_category" }
+    player.ws.onmessage = player_pick_category
 
 player_pick_category = (message) ->
-    console.log message.data
+    try
+        json = JSON.parse message.data
+        throw '(╯°□°）╯︵ ┻━┻' unless json.id? and json.high_good?
+        this.lobby.category = json.id
+        this.lobby.high_good = json.high_good
+        lobby_broadcast this.lobby, JSON.stringify({ type: "category", value: json.id, high_good: json.high_good }), player_pick_card
+    catch
+        this.terminate()
 
 pick_random_card = (cards) ->
     index = Math.floor(Math.random() * cards.length)
