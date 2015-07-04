@@ -177,7 +177,7 @@ deal_cards = (lobby) ->
                 for player in lobby.players
                     if player.score >= best_score
                         notify_winner player
-                    player.ws.terminate()
+                player.ws.terminate() for player in lobby.players
 
             break
         for player in lobby.players
