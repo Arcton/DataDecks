@@ -43,7 +43,7 @@ join_room = (message) ->
                     this.lobby.players.splice index, 1
                 if this.lobby.players.length is 1
                     notify_winner this.lobby.players[0], "default"
-                    this.lobby.players[0].ws.terminate()
+                    this.lobby.players[0].ws.close()
         console.log '%d joining %s', this.player.id, deck.name
         this.send JSON.stringify {
             type: "player"
@@ -189,7 +189,7 @@ deal_cards = (lobby) ->
                 for player in lobby.players
                     if player.score >= best_score
                         notify_winner player
-                player.ws.terminate() for player in lobby.players
+                player.ws.close() for player in lobby.players
 
             break
         for player in lobby.players
