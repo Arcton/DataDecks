@@ -8,12 +8,13 @@ HAND_SIZE = 3
 
 server = {}
 
+player_id = 0
+
 join_room = (message) ->
     try
         json = JSON.parse message.data
         throw ':(' unless json.id? and server.decks[json.id]?
         deck = server.decks[json.id]
-        console.log '%d joining %s', this.datadeck_client, deck.name
         deck.lobby = {
             deck: deck
             players: []
@@ -22,7 +23,7 @@ join_room = (message) ->
         } unless deck.lobby?
         this.lobby = deck.lobby
         this.player = {
-            id: this.lobby.players.length
+            id: (player_id += 1)
             ready: false
             ws: this
             cards: []
@@ -31,28 +32,35 @@ join_room = (message) ->
         deck.lobby.players.unshift this.player
         this.onmessage = player_ready
         this.on 'close', (event) ->
+            console.log '%d Disconnected with: %d', this.player.id, event
             # clean up
             delete this.player.ws
-            if this.lobby is this.lobby.deck.lobby
-                if lobby_empty this.lobby
-                    delete this.lobby.deck.lobby
-                else
-                    index = this.lobby.players.indexOf this.player
-                    if index isnt -1
-                        this.lobby.players.splice index, 1
+            if this.lobby is this.lobby.deck.lobby and lobby_empty this.lobby
+                delete this.lobby.deck.lobby
+            else
+                index = this.lobby.players.indexOf this.player
+                if index isnt -1
+                    this.lobby.players.splice index, 1
+                if this.lobby.players.length is 1
+                    notify_winner this.lobby.players[0], "default"
+                    this.lobby.players[0].ws.terminate()
+        console.log '%d joining %s', this.player.id, deck.name
+        this.send JSON.stringify { type: "player", id: this.player.id }
     catch
         this.terminate()
 
+notify_winner = (player, reason) ->
+    player.ws.send JSON.stringify { type: 'winner', reason: reason }
+
 lobby_empty = (lobby) ->
-    (return false if player.ws?) for player in lobby.players
-    true
+    lobby.players.length is 0
 
 lobby_ready = (lobby) ->
     (return false unless player.ready) for player in lobby.players
     true
 
 player_ready = () ->
-    console.log '%d ready', this.datadeck_client
+    console.log '%d ready', this.player.id
     this.player.ready = true
     this.onmessage = null
     if lobby_ready this.lobby
@@ -64,11 +72,10 @@ player_ready = () ->
 lobby_broadcast = (lobby, message, newstate) ->
     if newstate?
         for player in lobby.players
-            if player.ws?
-                player.ws.send message
-                player.ws.onmessage = newstate
+            player.ws.send message
+            player.ws.onmessage = newstate
     else
-        ((player.ws.send message) if player.ws?) for player in lobby.players
+        player.ws.send message for player in lobby.players
     undefined
 
 lobby_picked = (lobby) ->
@@ -105,20 +112,21 @@ player_pick_card = (message) ->
             for player in this.lobby.players
                 console.log this.lobby.deck.cards[player.pick]
                 delete player.pick
-        deal_cards this.lobby
-        notify_picker this.lobby
+            this.lobby.hand_size -= 1
+            deal_cards this.lobby
+            notify_picker this.lobby
     catch
-        this.terminate()
+       this.terminate()
 
 notify_picker = (lobby) ->
-    lobby.picker ?= Math.floor(Math.random() * lobby.players.length)
+    if lobby.picker?
+        lobby.picker += 1
+    else
+        lobby.picker = Math.floor(Math.random() * lobby.players.length)
     lobby.picker = 0 if lobby.picker >= lobby.players.length
     player = lobby.players[lobby.picker]
-    if player.ws?
-        player.ws.send JSON.stringify { type: "pick_category" }
-        player.ws.onmessage = player_pick_category
-    else
-        notify_picker lobby
+    player.ws.send JSON.stringify { type: "pick_category" }
+    player.ws.onmessage = player_pick_category
 
 player_pick_category = (message) ->
     try
@@ -138,6 +146,7 @@ pick_random_card = (cards) ->
 
 deal_cards = (lobby) ->
     while lobby.hand_size < HAND_SIZE
+        console.log "dealing..."
         if lobby.cards.length < lobby.players.length
             console.log "Server out of cards -> no more dealing"
             if lobby.players[0].cards.length < 1
@@ -146,8 +155,7 @@ deal_cards = (lobby) ->
         for player in lobby.players
             card = pick_random_card lobby.cards
             player.cards.push card
-            if player.ws?
-                player.ws.send JSON.stringify {type: "card", card: lobby.deck.cards[card].name, id: card}
+            player.ws.send JSON.stringify {type: "card", card: lobby.deck.cards[card].name, id: card}
         lobby.hand_size += 1
     undefined
 
@@ -162,15 +170,9 @@ exports.serve = (arg) ->
     else
         new websocket.Server {port: arg}
 
-    count = 0
     wss.on 'connection', (ws) ->
-        ws.datadeck_client = (count += 1)
-        console.log '%d Connected', ws.datadeck_client
         ws.send JSON.stringify { type: "decks", data: server.decks_summary }
         ws.onmessage = join_room
-        ws.on 'close', (event) ->
-            console.log '%d Disconnected with: %d', this.datadeck_client, event
-            
 
 # Allows us to be called by another module
 # (e.g. we could have the client include us)
