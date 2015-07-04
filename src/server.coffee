@@ -81,7 +81,8 @@ player_ready = () ->
         console.log 'lobby ready'
         lobby_start this.lobby
 
-lobby_broadcast = (lobby, message, newstate) ->
+lobby_broadcast = (lobby, json, newstate) ->
+    message = JSON.stringify json
     if newstate?
         for player in lobby.players
             player.ws.send message
@@ -99,14 +100,14 @@ get_pick_value = (lobby, player) ->
 
 increment_score = (lobby, player) ->
     player.score += 1
-    lobby_broadcast lobby, JSON.stringify {
+    lobby_broadcast lobby, {
         type: "score"
         player: player.id
         score: player.score
     }
 
 reveal_cards = (lobby) ->
-    lobby_broadcast lobby, JSON.stringify { type: "reveal", cards: for player in lobby.players
+    lobby_broadcast lobby, { type: "reveal", cards: for player in lobby.players
         card = lobby.deck.cards[player.pick]
         {
             name: card.name
@@ -162,11 +163,11 @@ player_pick_category = (message) ->
         throw '(╯°□°）╯︵ ┻━┻' unless json.id? and json.high_good?
         this.lobby.category = json.id
         this.lobby.high_good = json.high_good
-        lobby_broadcast this.lobby, (JSON.stringify {
+        lobby_broadcast this.lobby, {
             type: "category"
             value: json.id
             high_good: json.high_good
-        }), player_pick_card
+        }, player_pick_card
     catch
         this.terminate()
 
