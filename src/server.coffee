@@ -67,7 +67,7 @@ deal_cards = (lobby) ->
         for player in lobby.players
             card = pick_random_card lobby.cards
             player.cards.push card
-            player.ws.send JSON.stringify {card: lobby.deck.cards[card].name, id: card}
+            player.ws.send JSON.stringify {type: "card", card: lobby.deck.cards[card].name, id: card}
         lobby.hand_size += 1
     undefined
 
@@ -87,7 +87,7 @@ exports.serve = (arg) ->
     wss.on 'connection', (ws) ->
         ws.datadeck_client = (count += 1)
         console.log '%d Connected', ws.datadeck_client
-        ws.send JSON.stringify server.decks_summary
+        ws.send JSON.stringify { type: "decks", data: server.decks_summary }
         ws.onmessage = join_room
         ws.on 'close', (event) ->
             console.log '%d Disconnected with: %d', this.datadeck_client, event
