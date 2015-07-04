@@ -31,8 +31,8 @@ join_room = (message) ->
         }
         deck.lobby.players.unshift this.player
         this.onmessage = player_ready
-        this.on 'close', (event) ->
-            console.log '%d Disconnected with: %d', this.player.id, event
+        this.onclose = (event) ->
+            console.log '%d Disconnected with: %d', this.player.id, event.code
             # clean up
             delete this.player.ws
             if this.lobby is this.lobby.deck.lobby and lobby_empty this.lobby
@@ -50,6 +50,7 @@ join_room = (message) ->
         this.terminate()
 
 notify_winner = (player, reason) ->
+    reason ?= "score"
     player.ws.send JSON.stringify { type: 'winner', reason: reason }
 
 lobby_empty = (lobby) ->
@@ -109,9 +110,7 @@ player_pick_card = (message) ->
         this.player.pick = json.id
         if lobby_picked this.lobby
             update_score this.lobby
-            for player in this.lobby.players
-                console.log this.lobby.deck.cards[player.pick]
-                delete player.pick
+            delete player.pick for player in this.lobby.players
             this.lobby.hand_size -= 1
             deal_cards this.lobby
             notify_picker this.lobby
@@ -146,11 +145,19 @@ pick_random_card = (cards) ->
 
 deal_cards = (lobby) ->
     while lobby.hand_size < HAND_SIZE
-        console.log "dealing..."
         if lobby.cards.length < lobby.players.length
             console.log "Server out of cards -> no more dealing"
             if lobby.players[0].cards.length < 1
                 console.log "Players out of cards -> end of game"
+                best_score = 0
+                for player in lobby.players
+                    player.ws.onclose = null
+                    best_score = Math.max(best_score, player.score)
+                for player in lobby.players
+                    if player.score >= best_score
+                        notify_winner player
+                    player.ws.terminate()
+
             break
         for player in lobby.players
             card = pick_random_card lobby.cards
