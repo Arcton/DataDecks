@@ -67,16 +67,16 @@ deal_cards = (lobby) ->
         for player in lobby.players
             card = pick_random_card lobby.cards
             player.cards.push card
-            player.ws.send JSON.stringify {card: card}
+            player.ws.send JSON.stringify {card: lobby.deck.cards[card].name, id: card}
         lobby.hand_size += 1
     undefined
 
 exports.serve = (arg) ->
     server.decks = (require deck.full for deck in ls __dirname + '/decks/*.json')
-    server.decks_summary = { name: deck.name, id: index } for deck,index in server.decks
-    for deck in server.decks
+    server.decks_summary = for deck,index in server.decks
         deck.max_players = Math.min(MAX_PLAYERS, Math.round(deck.cards.length / CARDS_PER_PLAYER))
         deck.playing = []
+        { name: deck.name, id: index , categories: deck.categories }
 
     wss = if Object.prototype.toString.call(arg) is "[object Object]"
         new websocket.Server {server: arg}
