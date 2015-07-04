@@ -56,8 +56,24 @@ lobby_broadcast = (lobby, message, newstate) ->
         player.ws.send message for player in lobby.players
     undefined
 
+lobby_picked = (lobby) ->
+    (return false unless player.pick?) for player in lobby.players
+    true
+
+class tantrum
 player_pick_card = (message) ->
-    console.log 'pick card: %s', message.data
+    this.onmessage = null
+    try
+        json = JSON.parse message.data
+        throw new tantrum unless json.id? and (index = this.player.cards.indexOf json.id) isnt -1
+        this.player.cards.splice index, 1
+        this.player.pick = json.id
+        if lobby_picked this.lobby
+            for player in this.lobby.players
+                console.log this.lobby.deck.cards[player.pick]
+                delete player.pick
+    catch
+        this.terminate()
 
 set_picker = (lobby) ->
     lobby.picker ?= Math.floor(Math.random() * lobby.players.length)
