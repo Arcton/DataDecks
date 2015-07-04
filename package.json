@@ -2,6 +2,7 @@
     "name": "datadeck-server",
     "description": "Server for DataDecks project",
     "homepage": "https://github.com/Arcton/DataDecks",
+    "version": "0.0.1",
     "repository": {
         "type": "git",
         "url": "Arcton/DataDecks"
@@ -9,7 +10,9 @@
     "license": "MIT",
     "dependencies": {
         "ws": "~0.7.2",
-        "datadeck-client": "git+https://github.com/Arcton/DataDecks-Client.git"
+        "ls": "~0.1.0",
+        "datadeck-client": "git+https://github.com/Arcton/DataDecks-Client.git",
+        "datadeck-data": "git+https://github.com/Arcton/DataDecks-Data.git"
     },
     "devDependencies": {
         "coffee-script": "~1.9.3"
