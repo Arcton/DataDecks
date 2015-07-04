@@ -45,13 +45,19 @@ join_room = (message) ->
                     notify_winner this.lobby.players[0], "default"
                     this.lobby.players[0].ws.terminate()
         console.log '%d joining %s', this.player.id, deck.name
-        this.send JSON.stringify { type: "player", id: this.player.id }
+        this.send JSON.stringify {
+            type: "player"
+            id: this.player.id
+        }
     catch
         this.terminate()
 
 notify_winner = (player, reason) ->
     reason ?= "score"
-    player.ws.send JSON.stringify { type: 'winner', reason: reason }
+    player.ws.send JSON.stringify {
+        type: 'winner'
+        reason: reason
+    }
 
 lobby_empty = (lobby) ->
     lobby.players.length is 0
@@ -88,7 +94,11 @@ get_pick_value = (lobby, player) ->
 
 increment_score = (lobby, player) ->
     player.score += 1
-    lobby_broadcast lobby, JSON.stringify { type: "score", player: player.id, score: player.score }
+    lobby_broadcast lobby, JSON.stringify {
+        type: "score"
+        player: player.id
+        score: player.score
+    }
 
 update_score = (lobby) ->
     best = get_pick_value lobby, lobby.players[0]
@@ -124,7 +134,9 @@ notify_picker = (lobby) ->
         lobby.picker = Math.floor(Math.random() * lobby.players.length)
     lobby.picker = 0 if lobby.picker >= lobby.players.length
     player = lobby.players[lobby.picker]
-    player.ws.send JSON.stringify { type: "pick_category" }
+    player.ws.send JSON.stringify {
+        type: "pick_category"
+    }
     player.ws.onmessage = player_pick_category
 
 player_pick_category = (message) ->
@@ -133,7 +145,11 @@ player_pick_category = (message) ->
         throw '(╯°□°）╯︵ ┻━┻' unless json.id? and json.high_good?
         this.lobby.category = json.id
         this.lobby.high_good = json.high_good
-        lobby_broadcast this.lobby, JSON.stringify({ type: "category", value: json.id, high_good: json.high_good }), player_pick_card
+        lobby_broadcast this.lobby, (JSON.stringify {
+            type: "category"
+            value: json.id
+            high_good: json.high_good
+        }), player_pick_card
     catch
         this.terminate()
 
@@ -162,7 +178,12 @@ deal_cards = (lobby) ->
         for player in lobby.players
             card = pick_random_card lobby.cards
             player.cards.push card
-            player.ws.send JSON.stringify {type: "card", card: lobby.deck.cards[card].name, id: card}
+            player.ws.send JSON.stringify {
+                type: "card"
+                card: lobby.deck.cards[card].name
+                description: lobby.deck.cards[card].description
+                id: card
+            }
         lobby.hand_size += 1
     undefined
 
@@ -178,7 +199,10 @@ exports.serve = (arg) ->
         new websocket.Server {port: arg}
 
     wss.on 'connection', (ws) ->
-        ws.send JSON.stringify { type: "decks", data: server.decks_summary }
+        ws.send JSON.stringify {
+            type: "decks"
+            data: server.decks_summary
+        }
         ws.onmessage = join_room
 
 # Allows us to be called by another module
