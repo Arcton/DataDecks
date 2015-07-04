@@ -105,6 +105,17 @@ increment_score = (lobby, player) ->
         score: player.score
     }
 
+reveal_cards = (lobby) ->
+    lobby_broadcast lobby, JSON.stringify { type: "reveal", cards: for player in lobby.players
+        card = lobby.deck.cards[player.pick]
+        {
+            name: card.name
+            description: card.description
+            id: player.pick
+            value: card.categories[lobby.category]
+        }
+    }
+
 update_score = (lobby) ->
     best = get_pick_value lobby, lobby.players[0]
     for player in lobby.players
@@ -124,6 +135,7 @@ player_pick_card = (message) ->
         this.player.cards.splice index, 1
         this.player.pick = json.id
         if lobby_picked this.lobby
+            reveal_cards this.lobby
             update_score this.lobby
             delete player.pick for player in this.lobby.players
             this.lobby.hand_size -= 1
