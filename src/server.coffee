@@ -225,20 +225,12 @@ exports.serve = (arg) ->
 # Allows us to be called by another module
 # (e.g. we could have the client include us)
 unless module.parent?
-    standalone = false
-    sync = false
+    sync = true
     for arg in process.argv.slice 2
         switch arg
-            when "--standalone"
-                standalone = true
-            when "--sync"
-                sync = true
+            when "--nosync"
+                sync = false
             else
                 PORT = parseInt arg
-    if sync
-        (require 'datadeck-data').generate(__dirname + "/decks");
-    if standalone
-        exports.serve PORT
-    else
-        client = require 'datadeck-client'
-        exports.serve client.serve PORT
+    (require 'datadeck-data').generate(__dirname + "/decks") if sync
+    exports.serve PORT

@@ -11,7 +11,6 @@
     "dependencies": {
         "ws": "~0.7.2",
         "ls": "~0.1.0",
-        "datadeck-client": "git+https://github.com/Arcton/DataDecks-Client.git",
         "datadeck-data": "git+https://github.com/Arcton/DataDecks-Data.git"
     },
     "devDependencies": {
