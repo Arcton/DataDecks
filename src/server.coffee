@@ -79,7 +79,7 @@ player_ready = () ->
     this.onmessage = null
     if this.lobby.players.length > 1 and lobby_ready this.lobby
         console.log 'lobby ready'
-        lobby_start lobby
+        lobby_start this.lobby
 
 lobby_broadcast = (lobby, message, newstate) ->
     if newstate?
