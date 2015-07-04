@@ -70,7 +70,7 @@ player_ready = () ->
     console.log '%d ready', this.player.id
     this.player.ready = true
     this.onmessage = null
-    if lobby_ready this.lobby
+    if this.lobby.players.length > 1 and lobby_ready this.lobby
         console.log 'lobby ready'
         this.lobby.deck.lobby = null
         deal_cards this.lobby
