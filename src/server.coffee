@@ -8,7 +8,24 @@ HAND_SIZE = 3
 
 server = {}
 
-player_id = 0
+class Player
+    @count: 0
+    constructor: (@ws) ->
+        this.id = (Player.count += 1)
+        this.ready = false
+        this.cards = []
+        this.score = 0
+    send: (message) ->
+        if typeof message is 'object'
+            message = JSON.stringify message
+        try
+            this.ws.send message
+        catch err
+            console.log '%d error: %s', this.id, err
+            this.ws.terminate()
+    destroy: ->
+        delete this.ws
+
 
 join_room = (message) ->
     try
@@ -22,19 +39,13 @@ join_room = (message) ->
             hand_size: 0
         } unless deck.lobby?
         this.lobby = deck.lobby
-        this.player = {
-            id: (player_id += 1)
-            ready: false
-            ws: this
-            cards: []
-            score: 0
-        }
+        this.player = new Player this
         deck.lobby.players.unshift this.player
         this.onmessage = player_ready
         this.onclose = (event) ->
             console.log '%d Disconnected with: %d', this.player.id, event.code
             # clean up
-            delete this.player.ws
+            this.player.destroy
             if this.lobby is this.lobby.deck.lobby and lobby_empty this.lobby
                 delete this.lobby.deck.lobby
             else
@@ -44,13 +55,14 @@ join_room = (message) ->
                 if this.lobby.players.length is 1
                     lobby_winners this.lobby, [ this.lobby.players[0].id ], "default"
         console.log '%d joining %s', this.player.id, deck.name
-        this.send JSON.stringify {
+        this.player.send {
             type: "player"
             id: this.player.id
         }
         if this.lobby.players.length >= this.lobby.deck.max_players
             lobby_start this.lobby
-    catch
+    catch err
+        console.log err
         this.terminate()
 
 lobby_winners = (lobby, players, reason) ->
@@ -63,7 +75,10 @@ lobby_winners = (lobby, players, reason) ->
     for player in lobby.players
         player.ws.onclose = null
         player.ws.onmessage = null
-        ((sock) -> sock.send message, null, (() -> sock.close()))(player.ws)
+        console.log '%d Disconnected (gameover)', player.id
+        try
+            ((sock) -> sock.send message, null, (() -> sock.close()))(player.ws)
+        catch
 
 lobby_empty = (lobby) ->
     lobby.players.length is 0
@@ -83,12 +98,6 @@ player_ready = () ->
     if this.lobby.players.length > 1 and lobby_ready this.lobby
         console.log 'lobby ready'
         lobby_start this.lobby
-
-send_player = (player, json) ->
-    try
-        player.ws.send JSON.stringify json
-    catch
-        player.ws.terminate()
 
 lobby_broadcast = (lobby, json, newstate) ->
     message = JSON.stringify json
@@ -159,7 +168,7 @@ notify_picker = (lobby) ->
         lobby.picker = Math.floor(Math.random() * lobby.players.length)
     lobby.picker = 0 if lobby.picker >= lobby.players.length
     player = lobby.players[lobby.picker]
-    send_player player, {
+    player.send {
         type: "pick_category"
     }
     player.ws.onmessage = player_pick_category
@@ -204,7 +213,7 @@ deal_cards = (lobby) ->
         for player in lobby.players
             card = pick_random_card lobby.cards
             player.cards.push card
-            send_player player, {
+            player.send {
                 type: "card"
                 card: lobby.deck.cards[card].name
                 description: lobby.deck.cards[card].description
