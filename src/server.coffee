@@ -26,124 +26,161 @@ class Player
     destroy: ->
         delete this.ws
 
+class Lobby
+    constructor: (@deck) ->
+        this.players = []
+        this.cards = (index for card,index in this.deck.cards)
+        this.hand_size = 0
+    is_empty: ->
+        this.players.length is 0
+    is_ready: ->
+        (return false unless player.ready) for player in this.players
+        true
+    all_picked: ->
+        (return false unless player.pick?) for player in this.players
+        true
+    start: ->
+        console.log 'Starting %s with %d players', this.deck.name, this.players.length
+        this.deck.lobby = null
+        this.picker = Math.floor(Math.random() * this.players.length)
+        this.deal()
+    pick_card: ->
+        index = Math.floor(Math.random() * this.cards.length)
+        card = this.cards[index]
+        this.cards.splice index, 1
+        card
+    gameover: (reason) ->
+        reason ?= "score"
+        winners = []
+        best_score = 0
+        for player in this.players
+            if player.score is best_score
+                winners.unshift player.id
+            else if player.score > best_score
+                best_score = player.score
+                winners = [ player.id ]
+        message = JSON.stringify {
+            type: "winner"
+            reason: reason
+            players: winners
+        }
+        for player in this.players
+            player.ws.onclose = null
+            player.ws.onmessage = null
+            console.log 'Player %d Disconnected (gameover)', player.id
+            try
+                ((sock) -> sock.send message, null, (() -> sock.close()))(player.ws)
+            catch
+    deal: ->
+        while this.hand_size < HAND_SIZE
+            if this.cards.length < this.players.length
+                console.log "Server out of cards -> no more dealing"
+                if this.players[0].cards.length < 1
+                    console.log "Players out of cards -> end of game"
+                    this.gameover()
+                    return
+                break
+            for player in this.players
+                card = this.pick_card()
+                player.cards.push card
+                player.send {
+                    type: "card"
+                    card: this.deck.cards[card].name
+                    description: this.deck.cards[card].description
+                    id: card
+                }
+            this.hand_size += 1
+        this.notify_picker()
+    notify_picker: ->
+        this.picker += 1
+        this.picker %= this.players.length if this.picker >= this.players.length
+        player = this.players[this.picker]
+        player.send {
+            type: "pick_category"
+        }
+        player.ws.onmessage = player_pick_category
+    send: (message, newstate) ->
+        if typeof message is 'object'
+            message = JSON.stringify message
+        if newstate?
+            for player in this.players
+                player.send message
+                player.ws.onmessage = newstate
+        else
+            player.send message for player in this.players
+        undefined
+    update_score: ->
+        # find best card
+        best = this.deck.cards[this.players[0].pick].categories[this.category]
+        for player in this.players
+            score = this.deck.cards[player.pick].categories[this.category]
+            if this.high_good
+                best = score if score > best
+            else
+                best = score if score < best
+        # update the score for all players who picked the best card
+        for player in this.players
+            if this.deck.cards[player.pick].categories[this.category] is best
+                player.score += 1
+                this.send {
+                    type: "score"
+                    player: player.id
+                    score: player.score
+                }
+    reveal_cards: ->
+        this.send { type: "reveal", cards: for player in this.players
+            card = this.deck.cards[player.pick]
+            {
+                name: card.name
+                description: card.description
+                id: player.pick
+                value: card.categories[this.category]
+            }
+        }
+    round_end: ->
+        this.reveal_cards()
+        this.update_score()
+        delete player.pick for player in this.players
+        this.hand_size -= 1
+        this.deal()
+
+onclose = (event) ->
+    console.log 'Player %d Disconnected with: %d', this.player.id, event.code
+    # clean up
+    this.player.destroy
+    if this.lobby is this.lobby.deck.lobby and this.lobby.is_empty()
+        delete this.lobby.deck.lobby
+    else
+        index = this.lobby.players.indexOf this.player
+        (this.lobby.players.splice index, 1) if index isnt -1
+        (this.lobby.gameover "default") if this.lobby.players.length is 1
 
 join_room = (message) ->
     try
         json = JSON.parse message.data
         throw null unless json.id? and server.decks[json.id]?
         deck = server.decks[json.id]
-        deck.lobby = {
-            deck: deck
-            players: []
-            cards: index for card,index in deck.cards
-            hand_size: 0
-        } unless deck.lobby?
+        deck.lobby = new Lobby deck unless deck.lobby?
         this.lobby = deck.lobby
         this.player = new Player this
         deck.lobby.players.unshift this.player
         this.onmessage = player_ready
-        this.onclose = (event) ->
-            console.log '%d Disconnected with: %d', this.player.id, event.code
-            # clean up
-            this.player.destroy
-            if this.lobby is this.lobby.deck.lobby and lobby_empty this.lobby
-                delete this.lobby.deck.lobby
-            else
-                index = this.lobby.players.indexOf this.player
-                if index isnt -1
-                    this.lobby.players.splice index, 1
-                if this.lobby.players.length is 1
-                    lobby_winners this.lobby, [ this.lobby.players[0].id ], "default"
-        console.log '%d joining %s', this.player.id, deck.name
+        this.onclose = onclose
+        console.log 'Player %d joining %s', this.player.id, deck.name
         this.player.send {
             type: "player"
             id: this.player.id
         }
-        if this.lobby.players.length >= this.lobby.deck.max_players
-            lobby_start this.lobby
+        this.lobby.start() if this.lobby.players.length >= this.lobby.deck.max_players
     catch err
         console.log err
         this.terminate()
 
-lobby_winners = (lobby, players, reason) ->
-    reason ?= "score"
-    message = JSON.stringify {
-        type: "winner"
-        reason: reason
-        players: players
-    }
-    for player in lobby.players
-        player.ws.onclose = null
-        player.ws.onmessage = null
-        console.log '%d Disconnected (gameover)', player.id
-        try
-            ((sock) -> sock.send message, null, (() -> sock.close()))(player.ws)
-        catch
-
-lobby_empty = (lobby) ->
-    lobby.players.length is 0
-
-lobby_ready = (lobby) ->
-    (return false unless player.ready) for player in lobby.players
-    true
-
-lobby_start = (lobby) ->
-    lobby.deck.lobby = null
-    notify_picker lobby if deal_cards lobby
-
 player_ready = () ->
-    console.log '%d ready', this.player.id
+    console.log 'Player %d is ready for %s', this.player.id, this.lobby.deck.name
     this.player.ready = true
     this.onmessage = null
-    if this.lobby.players.length > 1 and lobby_ready this.lobby
-        console.log 'lobby ready'
-        lobby_start this.lobby
-
-lobby_broadcast = (lobby, json, newstate) ->
-    message = JSON.stringify json
-    if newstate?
-        for player in lobby.players
-            player.ws.send message
-            player.ws.onmessage = newstate
-    else
-        player.ws.send message for player in lobby.players
-    undefined
-
-lobby_picked = (lobby) ->
-    (return false unless player.pick?) for player in lobby.players
-    true
-
-get_pick_value = (lobby, player) ->
-    lobby.deck.cards[player.pick].categories[lobby.category]
-
-increment_score = (lobby, player) ->
-    player.score += 1
-    lobby_broadcast lobby, {
-        type: "score"
-        player: player.id
-        score: player.score
-    }
-
-reveal_cards = (lobby) ->
-    lobby_broadcast lobby, { type: "reveal", cards: for player in lobby.players
-        card = lobby.deck.cards[player.pick]
-        {
-            name: card.name
-            description: card.description
-            id: player.pick
-            value: card.categories[lobby.category]
-        }
-    }
-
-update_score = (lobby) ->
-    best = get_pick_value lobby, lobby.players[0]
-    for player in lobby.players
-        score = get_pick_value lobby, player
-        if lobby.high_good
-            best = score if score > best
-        else
-            best = score if score < best
-    ((increment_score lobby, player) if (get_pick_value lobby, player) is best) for player in lobby.players
+    this.lobby.start() if this.lobby.players.length > 1 and this.lobby.is_ready()
 
 player_pick_card = (message) ->
     this.onmessage = null
@@ -152,26 +189,10 @@ player_pick_card = (message) ->
         throw null unless json.id? and (index = this.player.cards.indexOf json.id) isnt -1
         this.player.cards.splice index, 1
         this.player.pick = json.id
-        if lobby_picked this.lobby
-            reveal_cards this.lobby
-            update_score this.lobby
-            delete player.pick for player in this.lobby.players
-            this.lobby.hand_size -= 1
-            notify_picker this.lobby if deal_cards this.lobby
-    catch
-       this.terminate()
-
-notify_picker = (lobby) ->
-    if lobby.picker?
-        lobby.picker += 1
-    else
-        lobby.picker = Math.floor(Math.random() * lobby.players.length)
-    lobby.picker = 0 if lobby.picker >= lobby.players.length
-    player = lobby.players[lobby.picker]
-    player.send {
-        type: "pick_category"
-    }
-    player.ws.onmessage = player_pick_category
+        this.lobby.round_end() if this.lobby.all_picked()
+    catch err
+        console.log err
+        this.terminate()
 
 player_pick_category = (message) ->
     try
@@ -179,48 +200,14 @@ player_pick_category = (message) ->
         throw null unless json.id? and json.high_good?
         this.lobby.category = json.id
         this.lobby.high_good = json.high_good
-        lobby_broadcast this.lobby, {
+        this.lobby.send {
             type: "category"
             value: json.id
             high_good: json.high_good
         }, player_pick_card
-    catch
+    catch err
+        console.log err
         this.terminate()
-
-pick_random_card = (cards) ->
-    index = Math.floor(Math.random() * cards.length)
-    card = cards[index]
-    cards.splice index, 1
-    card
-
-deal_cards = (lobby) ->
-    while lobby.hand_size < HAND_SIZE
-        if lobby.cards.length < lobby.players.length
-            console.log "Server out of cards -> no more dealing"
-            if lobby.players[0].cards.length < 1
-                console.log "Players out of cards -> end of game"
-                winners = []
-                best_score = 0
-                for player in lobby.players
-                    if player.score is best_score
-                        winners.unshift player.id
-                    else if player.score > best_score
-                        best_score = player.score
-                        winners = [ player.id ]
-                lobby_winners lobby, winners
-                return false
-            break
-        for player in lobby.players
-            card = pick_random_card lobby.cards
-            player.cards.push card
-            player.send {
-                type: "card"
-                card: lobby.deck.cards[card].name
-                description: lobby.deck.cards[card].description
-                id: card
-            }
-        lobby.hand_size += 1
-    true
 
 exports.serve = (arg) ->
     server.decks = (require deck.full for deck in ls __dirname + '/decks/*.json')
