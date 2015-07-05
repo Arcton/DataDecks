@@ -43,7 +43,6 @@ join_room = (message) ->
                     this.lobby.players.splice index, 1
                 if this.lobby.players.length is 1
                     lobby_winners this.lobby, [ this.lobby.players[0].id ], "default"
-                    this.lobby.players[0].ws.close()
         console.log '%d joining %s', this.player.id, deck.name
         this.send JSON.stringify {
             type: "player"
@@ -56,11 +55,15 @@ join_room = (message) ->
 
 lobby_winners = (lobby, players, reason) ->
     reason ?= "score"
-    lobby_broadcast lobby, {
+    message = JSON.stringify {
         type: "winner"
         reason: reason
         players: players
     }
+    for player in lobby.players
+        player.ws.onclose = null
+        player.ws.onmessage = null
+        ((sock) -> sock.send message, null, (() -> sock.close()))(player.ws)
 
 lobby_empty = (lobby) ->
     lobby.players.length is 0
@@ -71,8 +74,7 @@ lobby_ready = (lobby) ->
 
 lobby_start = (lobby) ->
     lobby.deck.lobby = null
-    deal_cards lobby
-    notify_picker lobby
+    notify_picker lobby if deal_cards lobby
 
 player_ready = () ->
     console.log '%d ready', this.player.id
@@ -140,8 +142,7 @@ player_pick_card = (message) ->
             update_score this.lobby
             delete player.pick for player in this.lobby.players
             this.lobby.hand_size -= 1
-            deal_cards this.lobby
-            notify_picker this.lobby
+            notify_picker if deal_cards this.lobby
     catch
        this.terminate()
 
@@ -186,15 +187,13 @@ deal_cards = (lobby) ->
                 winners = []
                 best_score = 0
                 for player in lobby.players
-                    player.ws.onclose = null
                     if player.score is best_score
                         winners.unshift player.id
                     else if player.score > best_score
                         best_score = player.score
                         winners = [ player.id ]
                 lobby_winners lobby, winners
-                player.ws.close() for player in lobby.players
-
+                return false
             break
         for player in lobby.players
             card = pick_random_card lobby.cards
@@ -206,7 +205,7 @@ deal_cards = (lobby) ->
                 id: card
             }
         lobby.hand_size += 1
-    undefined
+    true
 
 exports.serve = (arg) ->
     server.decks = (require deck.full for deck in ls __dirname + '/decks/*.json')
