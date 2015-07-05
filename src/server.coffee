@@ -142,7 +142,7 @@ player_pick_card = (message) ->
             update_score this.lobby
             delete player.pick for player in this.lobby.players
             this.lobby.hand_size -= 1
-            notify_picker if deal_cards this.lobby
+            notify_picker this.lobby if deal_cards this.lobby
     catch
        this.terminate()
 
