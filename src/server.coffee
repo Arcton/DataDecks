@@ -42,7 +42,7 @@ join_room = (message) ->
                 if index isnt -1
                     this.lobby.players.splice index, 1
                 if this.lobby.players.length is 1
-                    notify_winner this.lobby.players[0], "default"
+                    lobby_winners this.lobby, [ this.lobby.players[0].id ], "default"
                     this.lobby.players[0].ws.close()
         console.log '%d joining %s', this.player.id, deck.name
         this.send JSON.stringify {
@@ -54,11 +54,12 @@ join_room = (message) ->
     catch
         this.terminate()
 
-notify_winner = (player, reason) ->
+lobby_winners = (lobby, players, reason) ->
     reason ?= "score"
-    player.ws.send JSON.stringify {
-        type: 'winner'
+    lobby_broadcast lobby, {
+        type: "winner"
         reason: reason
+        players: players
     }
 
 lobby_empty = (lobby) ->
@@ -182,13 +183,16 @@ deal_cards = (lobby) ->
             console.log "Server out of cards -> no more dealing"
             if lobby.players[0].cards.length < 1
                 console.log "Players out of cards -> end of game"
+                winners = []
                 best_score = 0
                 for player in lobby.players
                     player.ws.onclose = null
-                    best_score = Math.max(best_score, player.score)
-                for player in lobby.players
-                    if player.score >= best_score
-                        notify_winner player
+                    if player.score == best_score
+                        winners.shift player.id
+                    else if player.score > best_score
+                        best_score = player.score
+                        winners = [ player.id ]
+                lobby_winners lobby, winners
                 player.ws.close() for player in lobby.players
 
             break
