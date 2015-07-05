@@ -84,6 +84,12 @@ player_ready = () ->
         console.log 'lobby ready'
         lobby_start this.lobby
 
+send_player = (player, json) ->
+    try
+        player.ws.send JSON.stringify json
+    catch
+        player.ws.terminate()
+
 lobby_broadcast = (lobby, json, newstate) ->
     message = JSON.stringify json
     if newstate?
@@ -153,7 +159,7 @@ notify_picker = (lobby) ->
         lobby.picker = Math.floor(Math.random() * lobby.players.length)
     lobby.picker = 0 if lobby.picker >= lobby.players.length
     player = lobby.players[lobby.picker]
-    player.ws.send JSON.stringify {
+    send_player player, {
         type: "pick_category"
     }
     player.ws.onmessage = player_pick_category
@@ -198,7 +204,7 @@ deal_cards = (lobby) ->
         for player in lobby.players
             card = pick_random_card lobby.cards
             player.cards.push card
-            player.ws.send JSON.stringify {
+            send_player player, {
                 type: "card"
                 card: lobby.deck.cards[card].name
                 description: lobby.deck.cards[card].description
