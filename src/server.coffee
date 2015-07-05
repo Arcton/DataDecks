@@ -187,8 +187,8 @@ deal_cards = (lobby) ->
                 best_score = 0
                 for player in lobby.players
                     player.ws.onclose = null
-                    if player.score == best_score
-                        winners.shift player.id
+                    if player.score is best_score
+                        winners.unshift player.id
                     else if player.score > best_score
                         best_score = player.score
                         winners = [ player.id ]
